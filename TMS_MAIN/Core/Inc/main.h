@@ -42,6 +42,9 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 
+extern int temp_table[138];
+
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
