@@ -9,7 +9,7 @@ Continuously receives tempatures from TMS_SATELLITE. Stores temperatures, sends 
 
 
 TMS_MAIN:
-
+  
 main.c
 Start threads for getting temperature values, storing temperatures, formatting and sending temperatures via CAN.
 
