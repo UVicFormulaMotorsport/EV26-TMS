@@ -77,7 +77,6 @@ CAN_Callback CAN_callback_table_2[table_size_2] = {0};
 SemaphoreHandle_t callback_table_1_mutex = NULL;
 SemaphoreHandle_t callback_table_2_mutex = NULL;
 
-
 uint8_t is_can_ok = 1;
 
 void handleCANbusError(const CAN_HandleTypeDef* hcan, const uint32_t err_to_ignore){
@@ -165,7 +164,7 @@ CAN_HandleTypeDef hcan2;
 void MX_CAN1_Init(void)
 {
 
-  CAN_TxHeaderTypeDef TxHeader;
+  //CAN_TxHeaderTypeDef TxHeader;
 
   /* USER CODE BEGIN CAN1_Init 0 */
 
@@ -270,7 +269,7 @@ void MX_CAN2_Init(void)
   	// Define the CAN Filter
     CAN_FilterTypeDef FilterConfig;
 
-    CAN_TxHeaderTypeDef TxHeader;
+    //CAN_TxHeaderTypeDef TxHeader;
 
     // Set the data length and ID to a temporary value
      TxHeader.DLC= 1; // Data Length Code
@@ -768,10 +767,6 @@ void insertCANMessageHandler(uint32_t id, void* handlerfunc, int can_num) {
     	 if(callback_table_2_mutex != NULL){xSemaphoreGive(callback_table_2_mutex);}
 
     }
-
-
-
-
 
 }
 

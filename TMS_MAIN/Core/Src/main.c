@@ -21,7 +21,9 @@
 #include "FreeRTOS.h"
 #include "comms_iso_spi.h"
 #include "temp_table.h"
+#include "can_format.h"
 #include <stdio.h>
+
 
 
 /* Private includes ----------------------------------------------------------*/
@@ -98,8 +100,8 @@ int main(void){
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_CAN1_Init();
-  MX_CAN2_Init();
+//  MX_CAN1_Init();
+//  MX_CAN2_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
@@ -113,7 +115,7 @@ int main(void){
   start_temp_store();
 
   // start thread to format and send temperature values over CAN
-  make_can_format();
+  start_make_can_format();
 
 
   vTaskStartScheduler();

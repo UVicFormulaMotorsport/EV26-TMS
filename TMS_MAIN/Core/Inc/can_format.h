@@ -9,7 +9,7 @@
 #define INC_CAN_FORMAT_H_
 
 void canFormSendTask(void* args);
-void start_form_send(void);
+void start_make_can_format(void);
 void store_and_format(int index);
 
 #endif /* INC_CAN_FORMAT_H_ */
