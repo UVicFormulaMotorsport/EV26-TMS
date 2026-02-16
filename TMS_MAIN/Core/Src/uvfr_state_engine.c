@@ -712,16 +712,16 @@ extern uint8_t is_can_ok;
  * to the error state, then get that shit the fuck outta here, we shuttin down fr fr.
  *
  */
-//void __uvPanic(char* msg, fault_event_type_e type, const char* file, const int line, const char* func){
-//
-//	if(is_can_ok){
-//		//uvSecureVehicle(); // ensure safe state of vehicle.
-//	}
-//	changeVehicleState(UV_ERROR_STATE); // log a fault from here then create
-//	//TODO: We should probably keep a log of this or something
-//
-//	logVehicleFault(type,NULL,msg,file,line,func,true);
-//}
+void __uvPanic(char* msg, fault_event_type_e type, const char* file, const int line, const char* func){
+
+	if(is_can_ok){
+		//uvSecureVehicle(); // ensure safe state of vehicle.
+	}
+	changeVehicleState(UV_ERROR_STATE); // log a fault from here then create
+	//TODO: We should probably keep a log of this or something
+
+	logVehicleFault(type,NULL,msg,file,line,func,true);
+}
 
 
 /** @brief This function is called by a task to nuke itself.

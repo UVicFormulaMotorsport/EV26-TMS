@@ -108,6 +108,27 @@ int main(void){
 
   int temp_table[138] = {0};
 
+
+  // uv_task_info* canTxtask = uvCreateServiceTask();
+	// canTxtask->task_function = CANbusTxSvcDaemon;
+	// canTxtask->active_states = 0xFFFF;
+	// canTxtask->task_name = CAN_TX_DAEMON_NAME;
+	// canTxtask->stack_size = 256;
+
+	// uv_task_info* canRxtask = uvCreateServiceTask();
+	// canRxtask->task_function = CANbusRxSvcDaemon;
+	// canRxtask->active_states = 0xFFFF;
+	// canRxtask->task_name = CAN_RX_DAEMON_NAME;
+	// canRxtask->stack_size = 256;
+	// //super basic for now, just need something working
+	// uint32_t var = 0; //dummy var
+
+  
+	// uvStartTask(&var,canTxtask);
+	// uvStartTask(&var,canRxtask);
+
+
+
   // start thread to get temperature values
   start_comms_iso_spi();
 

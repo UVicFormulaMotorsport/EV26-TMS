@@ -46,9 +46,8 @@
 //#include "pdu.h"
 //#include "daq.h"
 
-
 //#include "uvfr_conifer.h"
-//#include "uvfr_vehicle_logger.h"
+#include "uvfr_vehicle_logger.h"
 ////mainstay meat and potatoes tasks
 //#include "driving_loop.h"
 //#include "temp_monitoring.h"
