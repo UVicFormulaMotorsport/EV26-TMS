@@ -8,6 +8,9 @@
 #ifndef INC_COMMS_ISO_SPI_H_
 #define INC_COMMS_ISO_SPI_H_
 
+#include "FreeRTOS.h"
+#include "semphr.h"
+
 //#include <cmsis_os.h>
 #include "stm32f4xx_hal.h"
 
@@ -26,5 +29,7 @@ typedef struct {
 } temp_packet_s;
 
 extern temp_packet_s temp_packet1;
+
+extern SemaphoreHandle_t tempPacketMutex;
 
 #endif /* INC_COMMS_ISO_SPI_H_ */

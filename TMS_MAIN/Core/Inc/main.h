@@ -28,6 +28,8 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
+#include "FreeRTOS.h"
+#include "semphr.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -43,6 +45,14 @@ extern "C" {
 /* USER CODE BEGIN EC */
 
 extern int temp_table[138];
+
+extern SemaphoreHandle_t taskMutex;
+
+extern SemaphoreHandle_t panicMutex;
+
+extern TaskHandle_t task_table[10];
+
+extern int table_count;
 
 
 /* USER CODE END EC */

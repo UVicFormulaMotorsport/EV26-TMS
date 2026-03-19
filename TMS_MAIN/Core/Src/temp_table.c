@@ -11,12 +11,21 @@
 #include "task.h"
 #include "main.h"
 #include "temp_table.h"
+#include "semphr.h"
+#include "main.h"
+
 
 uint8_t last_count_1 = 0;
+
+//int temp_table[138] = {0};
 
 void store_in_table(int sat){
 
 	int table_ind = 0;
+
+
+	if(xSemaphoreTake(tempPacketMutex, portMAX_DELAY) == pdTRUE){
+
 
 	if(sat == 1){
 
@@ -41,6 +50,12 @@ void store_in_table(int sat){
 //			temp_table[table_ind] = temp_packet3.temps[i];
 //			table_ind = table_ind + 1;
 //		}
+
+
+
+	xSemaphoreGive(tempPacketMutex);
+	}// Mutex
+
 	}
 
 void tempStoreTask(void* arg){
@@ -64,7 +79,21 @@ void tempStoreTask(void* arg){
 
 void start_temp_store(void){
 
-	xTaskCreate(tempStoreTask, "tempstoreTask", 512, NULL, 1 , NULL);
+
+	TaskHandle_t myHandle;
+
+	if(xSemaphoreTake(taskMutex, portMAX_DELAY) == pdTRUE){
+
+
+	task_table[table_count] = myHandle;
+	table_count = table_count + 1;
+
+
+	xTaskCreate(tempStoreTask, "tempstoreTask", 512, NULL, 1 , &myHandle);
+
+
+	xSemaphoreGive(taskMutex);
+	}
 
 }
 

@@ -41,11 +41,11 @@
 									<listOptionValue builtIn="false" value="STM32L151xBA"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths.686943497" name="Include paths (-I)" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.option.includepaths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="../FreeRTOS/Source/portable/MemMang"/>
-									<listOptionValue builtIn="false" value="../FreeRTOS/Source"/>
-									<listOptionValue builtIn="false" value="../FreeRTOS/Source/include"/>
-									<listOptionValue builtIn="false" value="../FreeRTOS/Source/portable/GCC/ARM_CM3"/>
-									<listOptionValue builtIn="false" value="../FreeRTOS/Source/CMSIS_RTOS"/>
+									<listOptionValue builtIn="false" value="../Core/FreeRTOS/Source/portable/MemMang"/>
+									<listOptionValue builtIn="false" value="../Core/FreeRTOS/Source"/>
+									<listOptionValue builtIn="false" value="../Core/FreeRTOS/Source/include"/>
+									<listOptionValue builtIn="false" value="../Core/FreeRTOS/Source/portable/GCC/ARM_CM3"/>
+									<listOptionValue builtIn="false" value="../Core/FreeRTOS/Source/CMSIS_RTOS"/>
 									<listOptionValue builtIn="false" value="../Core/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32L1xx_HAL_Driver/Inc"/>
 									<listOptionValue builtIn="false" value="../Drivers/STM32L1xx_HAL_Driver/Inc/Legacy"/>

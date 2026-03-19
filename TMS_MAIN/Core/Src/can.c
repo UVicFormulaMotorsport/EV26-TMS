@@ -39,12 +39,20 @@
 //#include "bms.h"
 //#include "pdu.h"
 
-#include "uvfr_utils.h"
+//#include "uvfr_utils.h"
 
 #include "main.h"
 #include "stdlib.h"
 #include "string.h"
 #include "task.h"
+#include "queue.h"
+#include "cmsis_os.h"
+#include "semphr.h"
+#include "comms_iso_spi.h"
+#include "main.h"
+
+
+#include <stdbool.h>
 
 //This line holds the entire program together
 #ifndef HAL_CAN_ERROR_INVALID_CALLBACK
@@ -63,15 +71,16 @@ typedef struct CAN_Callback {
     uint32_t CAN_id;
     void* function;
     struct CAN_Callback* next;
+
 }CAN_Callback;
 
+static QueueHandle_t state_change_queue = NULL;
 
 /** Hash Table To Store CAN Messages
  *  Creates a hash table of size table_size and type CAN_Message
  *  Initialize all CAN messages in the hash table
 */
 CAN_Callback CAN_callback_table_1[table_size_1] = {0};
-
 CAN_Callback CAN_callback_table_2[table_size_2] = {0};
 
 SemaphoreHandle_t callback_table_1_mutex = NULL;
@@ -79,10 +88,175 @@ SemaphoreHandle_t callback_table_2_mutex = NULL;
 
 uint8_t is_can_ok = 1;
 
+static volatile bool SCD_active = false;
+
+
+void __uvPanic(void){
+
+	xTaskCreate(_shutDownTask,"SDT",256,NULL,osPriorityAboveNormal,NULL);
+
+
+}
+
+void start_CANTxSvcDaemon(){
+	TaskHandle_t myHandle1;
+
+	if(xSemaphoreTake(taskMutex, portMAX_DELAY) == pdTRUE){
+
+	task_table[table_count] = myHandle1;
+	table_count = table_count + 1;
+
+	xTaskCreate(CANbusTxSvcDaemon, "CAN_TX_DAEMON_NAME", 256, NULL, 1 , &myHandle1);
+
+	xSemaphoreGive(taskMutex);
+	}
+
+}
+
+void start_CANRxSvcDaemon(){
+	TaskHandle_t myHandle2;
+
+	if(xSemaphoreTake(taskMutex, portMAX_DELAY) == pdTRUE){
+
+
+	task_table[table_count] = myHandle2;
+	table_count = table_count + 1;
+
+
+	xTaskCreate(CANbusRxSvcDaemon, "CAN_RX_DAEMON_NAME", 256, NULL, 1 , &myHandle2);
+
+	xSemaphoreGive(taskMutex);
+	}
+
+}
+
+typedef struct state_change_daemon_args{
+	TaskHandle_t meta_task_handle;
+}state_change_daemon_args;
+
+
+
+
+void _shutDownTask(void* args){
+
+	if(xSemaphoreTake(panicMutex, portMAX_DELAY) == pdTRUE){
+
+	for(int i = 0;i < table_count;i++){
+
+		if(task_table[i] != NULL){
+
+		vTaskDelete(task_table[i]);
+		task_table[i] = NULL;
+		}
+
+	}
+
+	xSemaphoreGive(panicMutex);
+	}
+
+
+
+}
+
+/** @brief function that checks to make sure a pointer points to a place it is allowed to point to
+ *
+ * The primary motivation for this is to avoid trying to dereference a pointer that doesnt exist, and
+ * triggering the @c HardFaultHandler(). That is never a fun time.
+ * This allows us to exit gracefully instead of getting stuck in an IRQ handler
+ *
+ * Exiting gracefully can be pretty neat sometimes.
+ */
+uv_status uvIsPTRValid(void* ptr){
+	if(ptr == NULL){
+		return UV_WARNING;
+	}
+	uint32_t pval = (uint32_t)ptr;
+
+	//bool is_valid = false;
+
+	if(pval < 0x000FFFFF){ //Aliased to FLASH, systmem or SRAM
+		return UV_OK;
+	}
+
+	if((pval > 0x08000000)&& (pval < 0x080FFFFF)){ //Flash be like
+		return UV_OK;
+	}
+
+	if((pval > 0x10000000)&&(pval < 0x1000FFFF)){ //CCM Data RAM
+		return UV_OK;
+	}
+
+	if((pval > 0x1FFF0000)&&(pval < 0x1FFF7A0F)){ //System memory + OTP
+		return UV_OK;
+	}
+
+	if((pval > 0x1FFFC000)&&(pval < 0x1FFFC007)){ //option bytes (should these be user accessable under any circumstances?)
+		return UV_WARNING;
+	}
+
+	if((pval > 0x20000000)&&(pval < 0x2001FFFF)){ //SRAM :)
+		return UV_OK;
+	}
+
+	if((pval > 0x40000000)&&(pval < 0x40007FFF)){ //APB1
+		return UV_OK;
+	}
+
+	if((pval > 0x40010000)&&(pval < 0x400157FF)){ //APB2
+		return UV_OK;
+	}
+
+	if((pval > 0x40020000)&&(pval < 0x4007FFFF)){ //AHB1
+		return UV_OK;
+	}
+
+	if((pval > 0x50000000)&&(pval < 0x50060BFF)){//AHB2
+		return UV_OK;
+	}
+
+	if((pval > 0x60000000)&&(pval < 0xA0000FFF)){//AHB3
+		return UV_OK;
+	}
+
+	if((pval > 0xE0000000)&&(pval < 0xE00FFFFF)){//
+		return UV_OK;
+	}
+
+	return UV_ERROR;
+}
+
+
+
+
+/** @brief Thread-safe wrapper for @c free
+ *
+ * This is typically called from the macro expansion of @c uvFree(x)
+ *
+ */
+uv_status __uvFreeCritSection(void* ptr){
+	if(ptr == NULL){
+		return UV_ERROR;//Cant free something that doesnt exist
+	}
+
+	if(uvIsPTRValid(ptr)!= UV_OK){
+		return UV_ERROR;
+	}
+
+	vTaskSuspendAll();
+
+	free(ptr);
+
+	if(xTaskResumeAll() != pdTRUE){
+
+	}
+	return UV_OK;
+}
+
+
 void handleCANbusError(const CAN_HandleTypeDef* hcan, const uint32_t err_to_ignore){
 	is_can_ok = 0;
 	if(hcan == NULL){
-		uvPanic("null can handle",0);
+		uvPanic();
 		return;
 	}
 
@@ -96,53 +270,53 @@ void handleCANbusError(const CAN_HandleTypeDef* hcan, const uint32_t err_to_igno
 	if(errcode == HAL_CAN_ERROR_NONE){
 		return;
 	}else if(errcode & HAL_CAN_ERROR_EWG){ //protocol error
-		uvPanic("CAN protocol error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_EPV){ //passive
-		uvPanic("CAN passive error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_BOF){ //Bus-off error
-		uvPanic("CAN Bus off error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_STF){ //Stuff error
-		uvPanic("CAN Stuff error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_FOR){ //Form error
-		uvPanic("CAN Form error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_ACK){ //Acknowledgement error
-		uvPanic("CAN Ack error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_BR){ //bit recessive
-		uvPanic("CAN Recessive Bit error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_BD){ //bit dominant
-		uvPanic("CAN Dominant Bit error",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_CRC){//cyclic redundancy check
-		uvPanic("CAN CRC Failed",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_RX_FOV0){//overrun rx fifo0
-		uvPanic("CAN RX FIFO0",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_RX_FOV1){//overrun rx fifo1
-		uvPanic("CAN RX FIFO1",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_ALST0){//tx mailbox 0 arbitration lost
-		uvPanic("CAN0 arbitration",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_TERR0){//tx mailbox 0 transmit error
-		uvPanic("CAN0 transmit err",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_ALST1){//tx mailbox 1 arbitration lost error
-		uvPanic("CAN1 arbitration",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_TERR1){//tx mailbox 1 transmit error
-		uvPanic("CAN1 transmit err",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_ALST2){//tx mailbox 2 arbitration lost error
-		uvPanic("CAN2 arbitration",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TX_TERR2){//tx mailbox 2 transmit error
-		uvPanic("CAN2 transmit err",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_TIMEOUT){//timeout
-		uvPanic("CAN timeout",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_NOT_INITIALIZED){//is not initialized
-		uvPanic("CAN not init",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_NOT_READY){//Not ready
-		uvPanic("CAN_not_ready",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_NOT_STARTED){//not started
-		uvPanic("HAL_CAN_NOT_STARTED",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_PARAM){//Param
-		uvPanic("CAN Param",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_INVALID_CALLBACK){//invalid callback
-		uvPanic("Invalid_callback",0);
+		uvPanic();
 	}else if(errcode & HAL_CAN_ERROR_INTERNAL){//internal error
-		uvPanic("HAL_internal",0);
+		uvPanic();
 	}else{
 		//no clue how we got here
 
@@ -151,8 +325,9 @@ void handleCANbusError(const CAN_HandleTypeDef* hcan, const uint32_t err_to_igno
 
 }
 
-extern CAN_TxHeaderTypeDef   TxHeader2;
-//extern CAN_TxHeaderTypeDef   TxHeader;
+CAN_TxHeaderTypeDef   TxHeader2;
+CAN_TxHeaderTypeDef   TxHeader;
+uint32_t TxMailbox;
 
 /* USER CODE END 0 */
 
@@ -669,7 +844,7 @@ void insertCANMessageHandler(uint32_t id, void* handlerfunc, int can_num) {
     	if(xSemaphoreTake(callback_table_1_mutex,10) == pdTRUE){
 
     	}else{
-    		return UV_ERROR;
+    		return;
     	}
 
 
@@ -722,7 +897,7 @@ void insertCANMessageHandler(uint32_t id, void* handlerfunc, int can_num) {
     	    if(xSemaphoreTake(callback_table_2_mutex,10) == pdTRUE){
 
     	    }else{
-    	    	return UV_ERROR;
+    	    	return;
 
     	    }
     	}
@@ -828,8 +1003,9 @@ void nuke_hash_table(int can_num) {
 
 
 uv_status __uvCANtxCritSection(uv_CAN_msg* tx_msg){
+
 	if(tx_msg == NULL){
-		uvPanic("cannot send null CAN msg",0);
+		uvPanic();
 	}
 
 	if((tx_msg->flags)& UV_CAN_EXTENDED_ID){
@@ -848,7 +1024,7 @@ uv_status __uvCANtxCritSection(uv_CAN_msg* tx_msg){
 		/* Transmission request Error */
 		taskEXIT_CRITICAL();
 		is_can_ok = 0;
-		uvPanic("Unable to Transmit CAN msg",0);
+		uvPanic();
 		return UV_ERROR;
 	}else{
 		taskEXIT_CRITICAL();
@@ -866,7 +1042,6 @@ uv_status __uvCANtxCritSection(uv_CAN_msg* tx_msg){
  * Is that worth it? Still yes.
  */
 uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
-
 	//static TaskHandle_t can_tx_daemon_handle = NULL;
 	//static uv_task_id can_tx_daemon_task_id;
 
@@ -886,7 +1061,7 @@ uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
 		if(tx_msg->flags & UV_CAN_CRIT_MSG_BIT){ //Critical messages skip the queue
 			if(!is_isr){
 				if(xQueueSendToFront(Tx_msg_queue,tx_msg,0) != pdPASS){
-					uvPanic("couldnt enqueue CAN message",0);
+					uvPanic();
 				}else{
 					return UV_OK;
 				}
@@ -895,7 +1070,7 @@ uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
 			}else{
 				if(xQueueSendToFrontFromISR(Tx_msg_queue,tx_msg,0) != pdPASS){
 					is_can_ok = 0;
-					uvPanic("couldnt enqueue CAN message",0);
+					uvPanic();
 				}else{
 					return UV_OK;
 				}
@@ -906,7 +1081,7 @@ uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
 
 		if(!is_isr){
 			if(xQueueSendToBack(Tx_msg_queue,tx_msg,0) != pdPASS){
-				uvPanic("couldnt enqueue CAN message",0);
+				uvPanic();
 			}else{
 				return UV_OK;
 			}
@@ -915,7 +1090,7 @@ uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
 		}else{
 			if(xQueueSendToBackFromISR(Tx_msg_queue,tx_msg,0) != pdPASS){
 				is_can_ok = 0;
-				uvPanic("couldnt enqueue CAN message",0);
+				uvPanic();
 			}else{
 				return UV_OK;
 			}
@@ -929,6 +1104,43 @@ uv_status uvSendCanMSG(uv_CAN_msg* tx_msg){
 		}
 	}
 	return UV_OK;
+}
+
+//TAKEN FROM uvfr_utils.c
+/** @brief Wrapper function for @c malloc() that makes it thread safe
+ *
+ * This typically appears in a macro expansion from @c uvMalloc(x)
+ *
+ */
+void * __uvMallocCritSection(size_t memrequest){
+	void* ptr = NULL;
+	uint8_t oopsie_detected = 0;
+
+	if(memrequest == 0){
+		return NULL;
+	}
+
+	vTaskSuspendAll();
+
+	ptr = malloc(memrequest);
+
+	if(ptr == NULL){
+		oopsie_detected = 1;
+	}
+
+
+	if( xTaskResumeAll() == pdTRUE){
+
+
+	}else{
+
+	}
+
+	if(oopsie_detected){
+		return NULL;
+	}
+
+	return ptr;
 }
 
 /** @brief Background task that handles any CAN messages that are being sent
@@ -965,7 +1177,7 @@ void CANbusTxSvcDaemon(void* args){
 		if(result == pdTRUE){
 
 			if(tx_msg == NULL){
-				uvPanic("cannot send null CAN msg",0);
+				uvPanic();
 			}
 
 			TickType_t attempt_time1 = xTaskGetTickCount();
@@ -986,7 +1198,7 @@ void CANbusTxSvcDaemon(void* args){
 				while(HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0){
 					if(xTaskGetTickCount() - attempt_time1 >= 2){
 						is_can_ok = 0;
-						uvPanic("Unable to Transmit CAN msg",0);
+						uvPanic();
 
 						if (CAN1->ESR & CAN_ESR_BOFF) {
 						    // Bus-off condition
@@ -1001,7 +1213,7 @@ void CANbusTxSvcDaemon(void* args){
 				if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, tx_msg->data, &TxMailbox) != HAL_OK){
 				/* Transmission request Error */
 					is_can_ok = 0;
-					uvPanic("Unable to Transmit CAN msg",0);
+					uvPanic();
 				}
 
 
@@ -1021,7 +1233,7 @@ void CANbusTxSvcDaemon(void* args){
 				while(HAL_CAN_GetTxMailboxesFreeLevel(&hcan2) == 0){
 				if(xTaskGetTickCount() - attempt_time2 >= 2){
 					is_can_ok = 0;
-					uvPanic("Unable to Transmit CAN msg",0);
+					uvPanic();
 					break;
 				}
 			}
@@ -1029,7 +1241,7 @@ void CANbusTxSvcDaemon(void* args){
 			if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader2, tx_msg->data, &TxMailbox) != HAL_OK){
 														/* Transmission request Error */
 				is_can_ok = 0;
-				uvPanic("Unable to Transmit CAN msg",0);
+				uvPanic();
 			}
 
 		  }
@@ -1042,12 +1254,91 @@ void CANbusTxSvcDaemon(void* args){
 			Tx_msg_queue = NULL;
 			vQueueDelete(tmpqueue);
 
-			killSelf(params);
+//			killSelf(params);
+//
+			vTaskDelete(params->task_handle);
 		} else if(params->cmd_data == UV_SUSPEND_CMD){
-			suspendSelf(params);
+			vTaskSuspend(params->task_handle);
+//			suspendSelf(params);
 		}
 
 	}//main for loop
+}
+
+/** @brief This function is called by a task to nuke itself.
+ * Is a wrapper function that is used to do all the different things.
+ *
+ */
+void killSelf(uv_task_info* t){
+	/** First lets load up the queue and the values in it.
+	 * These come from the task we are doing.
+	 *
+	 */
+
+	if(t == NULL){
+		uvPanic();
+	}
+	//QueueHandle_t status_queue = t->manager;
+	uv_scd_response* response = uvMalloc(sizeof(uv_scd_response));
+
+	if(response == NULL){
+		uvPanic();
+	}
+
+	t->task_state = UV_TASK_DELETED;
+	response->meta_id = t->task_id;
+	response->response_val = UV_SUCCESSFUL_DELETION;
+
+	if(state_change_queue != NULL){
+		if(xQueueSend(state_change_queue, &response, 0) != pdPASS){
+			uvFree(response); //no memory leaks here sir :)
+			uvPanic();
+		}
+	}else{ //bro why tf is the queue null
+		uvPanic();
+	}
+
+	t->cmd_data = UV_NO_CMD;
+
+	vTaskDelete(t->task_handle);
+}
+
+/** @brief Called by a task that needs to suspend itself, once the task has determined it
+ * is safe to do so.
+ *
+ *
+ */
+void suspendSelf(uv_task_info* t){
+
+	if(t == NULL){
+		uvPanic();
+	}
+	//QueueHandle_t status_queue = t->manager;
+	uv_scd_response* response = uvMalloc(sizeof(uv_scd_response));
+
+
+	if(response == NULL){
+		uvPanic();
+	}
+
+	t->task_state = UV_TASK_SUSPENDED;
+	response->meta_id = t->task_id;
+	response->response_val = UV_SUCCESSFUL_SUSPENSION;
+
+
+	if(state_change_queue != NULL){
+		if(xQueueSend(state_change_queue, &response, 0) != pdPASS){
+			uvFree(response);
+			uvPanic();
+		}
+
+	}else{
+		uvPanic();
+	}
+
+	t->cmd_data = UV_NO_CMD;
+
+	vTaskSuspend(t->task_handle);
 }
 
 

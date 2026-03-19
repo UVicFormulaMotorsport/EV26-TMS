@@ -12,5 +12,4 @@ void tempStoreTask(void* args);
 void start_temp_store(void);
 void store_in_table(int index);
 
-
 #endif /* INC_TEMP_TABLE_H_ */

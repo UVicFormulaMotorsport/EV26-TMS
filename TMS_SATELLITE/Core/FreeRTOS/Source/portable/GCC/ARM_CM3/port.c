@@ -271,7 +271,7 @@ BaseType_t xPortStartScheduler( void )
      * following ways:
      * 1. Direct Routing - Install the functions vPortSVCHandler and
      *    xPortPendSVHandler for SVCall and PendSV interrupts respectively.
-     * 2. Indirect Routing - Install separate handlers for SVCall and PendSV
+     * 2. Indirect Routing - Install separate handlers for SVCall and PendSVH
      *    interrupts and route program control from those handlers to
      *    vPortSVCHandler and xPortPendSVHandler functions.
      *
@@ -495,12 +495,12 @@ void xPortSysTickHandler( void )
      * save and then restore the interrupt mask value as its value is already
      * known. */
     portDISABLE_INTERRUPTS();
-    traceISR_ENTER();
+    //traceISR_ENTER();
     {
         /* Increment the RTOS tick. */
         if( xTaskIncrementTick() != pdFALSE )
         {
-            traceISR_EXIT_TO_SCHEDULER();
+            //traceISR_EXIT_TO_SCHEDULER();
 
             /* A context switch is required.  Context switching is performed in
              * the PendSV interrupt.  Pend the PendSV interrupt. */
@@ -508,7 +508,7 @@ void xPortSysTickHandler( void )
         }
         else
         {
-            traceISR_EXIT();
+            //traceISR_EXIT();
         }
     }
     portENABLE_INTERRUPTS();

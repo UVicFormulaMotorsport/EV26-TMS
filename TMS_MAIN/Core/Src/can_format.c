@@ -10,7 +10,11 @@
 #include "can_format.h"
 #include <stdio.h>
 #include "comms_iso_spi.h"
-#include "uvfr_utils.h"
+#include "can.h"
+#include "semphr.h"
+#include "main.h"
+
+//#include "uvfr_utils.h"
 
 
 void unload_satt_1(void){
@@ -33,6 +37,8 @@ void unload_satt_1(void){
 
 	int p = 0;
 
+
+	if(xSemaphoreTake(tempPacketMutex, portMAX_DELAY) == pdTRUE){
 
 	//populate can bus data from satellite data
 	for(int i = 0; i < 8; i++){
@@ -60,6 +66,12 @@ void unload_satt_1(void){
 	uvSendCanMSG(&msg1);
 	uvSendCanMSG(&msg2);
 	uvSendCanMSG(&msg3);
+
+
+	xSemaphoreGive(tempPacketMutex);
+	}// Mutex
+
+
 }
 
 void unload_satt_2(void){
@@ -85,6 +97,18 @@ void canFormSendTask(void* args){
 
 void start_make_can_format(void){
 
-	xTaskCreate(canFormSendTask, "canFormSendTask", 512, NULL, 1 , NULL);
+	TaskHandle_t myHandle;
+
+	if(xSemaphoreTake(taskMutex, portMAX_DELAY) == pdTRUE){
+
+
+	task_table[table_count] = myHandle;
+	table_count = table_count + 1;
+
+
+	xTaskCreate(canFormSendTask, "canFormSendTask", 256, NULL, 1 , &myHandle);
+
+	xSemaphoreGive(taskMutex);
+	}
 
 }

@@ -22,7 +22,9 @@
 #include "comms_iso_spi.h"
 #include "temp_table.h"
 #include "can_format.h"
+#include "can.h"
 #include <stdio.h>
+
 
 
 
@@ -69,6 +71,18 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+  int temp_table[138] = {0};
+
+  TaskHandle_t task_table[10] = {NULL};
+
+  int table_count = 0;
+
+  SemaphoreHandle_t tempPacketMutex = NULL;
+
+  SemaphoreHandle_t taskMutex = NULL;
+
+  SemaphoreHandle_t panicMutex = NULL;
+
 /* USER CODE END 0 */
 
 /**
@@ -106,8 +120,41 @@ int main(void){
   /* USER CODE BEGIN 2 */
 
 
-  int temp_table[138] = {0};
+//  int temp_table[138] = {0};
+//
+//  TaskHandle_t task_table[10] = {NULL};
+//
+//  int table_count = 0;
 
+  tempPacketMutex = xSemaphoreCreateMutex();
+
+  taskMutex = xSemaphoreCreateMutex();
+
+  panicMutex = xSemaphoreCreateMutex();
+
+  // uv_task_info* canTxtask = uvCreateServiceTask();
+  // canTxtask->task_function = CANbusTxSvcDaemon;
+  // canTxtask->active_states = 0xFFFF;
+  // canTxtask->task_name = CAN_TX_DAEMON_NAME;
+  // canTxtask->stack_size = 256;
+
+  // uv_task_info* canRxtask = uvCreateServiceTask();
+  // canRxtask->task_function = CANbusRxSvcDaemon;
+  // canRxtask->active_states = 0xFFFF;
+  // canRxtask->task_name = CAN_RX_DAEMON_NAME;
+  // canRxtask->stack_size = 256;
+  // //super basic for now, just need something working
+  // uint32_t var = 0; //dummy var
+
+
+  // uvStartTask(&var,canTxtask);
+  // uvStartTask(&var,canRxtask);
+
+
+  start_CANTxSvcDaemon();
+
+  start_CANRxSvcDaemon();
+  
   // start thread to get temperature values
   start_comms_iso_spi();
 

@@ -100,7 +100,7 @@ int main(void){
 
   // start thread to send temperature values over iso spi
   start_comms_iso_spi_send();
-
+  
   vTaskStartScheduler();
 
 
@@ -115,9 +115,6 @@ int main(void){
 
     /* USER CODE BEGIN 3 */
   }
-
-
-
 
 
 
